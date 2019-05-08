@@ -15,11 +15,12 @@ namespace PokerTestProgram
             var orderedByValue = cards.OrderBy(card => card.Value).ToList();
             var boost = (int) Math.Pow(10, 6);
 
-            //Look for similar cards:
-            var threesList = new List<Card>();
+            //Look for cards of the same kind:
             var pairsList = new List<Card>();
-            var foursList = new List<Card>();
+            var threeOfAKindList = new List<Card>();
+            var fourOfAKindList = new List<Card>();
             var i = 0;
+            
             while (i < 6)
             {
                 if (orderedByValue.ElementAt(i).Value == orderedByValue.ElementAt(i + 1).Value)
@@ -32,24 +33,22 @@ namespace PokerTestProgram
                     }
                     if (i < 4 && orderedByValue.ElementAt(i + 3).Value == orderedByValue.ElementAt(i).Value)
                     {
-                        foursList.AddRange(orderedByValue.GetRange(i, 4));
+                        fourOfAKindList.AddRange(orderedByValue.GetRange(i, 4));
                         break;
                     }
-                    threesList.AddRange(orderedByValue.GetRange(i, 3));
+                    threeOfAKindList.AddRange(orderedByValue.GetRange(i, 3));
                     i = i + 3;
                     continue;
                 }
                 i++;
             }
             if (pairsList.Count == 6) pairsList.RemoveRange(0, 2);    // if there's more than 2 pairs, remove the pair of least value
-            if (threesList.Count == 6) threesList.RemoveRange(0, 3);  // if there's 2x Three of a kind, remove the three of a kind of least value
+            if (threeOfAKindList.Count == 6) threeOfAKindList.RemoveRange(0, 3);  // if there's 2x Three of a kind, remove the three of a kind of least value
 
             //Look for similar shape:
             var sameShapeList = cards.Where(card => card.Suit == Suit.Clubs).OrderBy(card => card.Value).ToList();
             if (sameShapeList.Count < 5)
-                sameShapeList = cards.Where(card => card.Suit == Suit.Diamonds)
-                    .OrderBy(card => card.Value)
-                    .ToList();
+                sameShapeList = cards.Where(card => card.Suit == Suit.Diamonds).OrderBy(card => card.Value).ToList();
             if (sameShapeList.Count < 5)
                 sameShapeList = cards.Where(card => card.Suit == Suit.Hearts).OrderBy(card => card.Value).ToList();
             if (sameShapeList.Count < 5)
@@ -58,18 +57,24 @@ namespace PokerTestProgram
             //Look for ascending
             var ascending = new List<Card>();
             for (var j = 0; j < 6; j++)
-            for (var q = j + 1; q < 7; q++)
             {
-                var tempOrdered = new List<Card>();
-                tempOrdered.AddRange(orderedByValue);
-                tempOrdered.RemoveAt(q);
-                tempOrdered.RemoveAt(j);
+                for (var q = j + 1; q < 7; q++)
+                {
+                    var tempOrdered = new List<Card>();
+                    tempOrdered.AddRange(orderedByValue);
+                    tempOrdered.RemoveAt(q);
+                    tempOrdered.RemoveAt(j);
 
-                var tempAscending = 0;
-                for (var m = 0; m < 4; m++)
-                    if (tempOrdered[m].Value + 1 == tempOrdered[m + 1].Value) tempAscending++;
-                if (tempAscending == 4 && SumListCard(ascending) < SumListCard(tempOrdered))
-                    ascending = tempOrdered;
+                    var tempAscending = 0;
+                    for (var m = 0; m < 4; m++)
+                    {
+                        if (tempOrdered[m].Value + 1 == tempOrdered[m + 1].Value)
+                            tempAscending++;
+                    }
+
+                    if (tempAscending == 4 && SumListCard(ascending) < SumListCard(tempOrdered))
+                        ascending = tempOrdered;
+                }
             }
 
             //Decide Hand
@@ -80,19 +85,19 @@ namespace PokerTestProgram
                 handRank = hand.ElementAt(0).Value == 10 ? HandRank.RoyalFlush : HandRank.StraightFlush;
                 handValue = CalculateHandValue(hand, 8 * boost);
             }
-            else if (foursList.Count == 4)
+            else if (fourOfAKindList.Count == 4)
             {
                 handRank = HandRank.FourOfAKind;
-                orderedByValue.RemoveAll(card => foursList.Contains(card));
+                orderedByValue.RemoveAll(card => fourOfAKindList.Contains(card));
                 hand.Add(orderedByValue.ElementAt(2));
-                hand.AddRange(foursList);
+                hand.AddRange(fourOfAKindList);
                 handValue = CalculateHandValue(hand, 7 * boost);
             }
-            else if (threesList.Count == 3 && pairsList.Count >= 2)
+            else if (threeOfAKindList.Count == 3 && pairsList.Count >= 2)
             {
                 handRank = HandRank.FullHouse;
                 hand.AddRange(pairsList.GetRange(pairsList.Count - 2, 2));
-                hand.AddRange(threesList);
+                hand.AddRange(threeOfAKindList);
                 handValue = CalculateHandValue(hand, 6 * boost);
             }
             else if (sameShapeList.Count >= 5)
@@ -107,12 +112,12 @@ namespace PokerTestProgram
                 handRank = HandRank.Straight;
                 handValue = CalculateHandValue(hand, 4 * boost);
             }
-            else if (threesList.Count == 3)
+            else if (threeOfAKindList.Count == 3)
             {
                 handRank = HandRank.ThreeOfAKind;
-                orderedByValue.RemoveAll(card => threesList.Contains(card));
+                orderedByValue.RemoveAll(card => threeOfAKindList.Contains(card));
                 hand.AddRange(orderedByValue.GetRange(2, 2));
-                hand.AddRange(threesList);
+                hand.AddRange(threeOfAKindList);
                 handValue = CalculateHandValue(hand, 3 * boost);
             }
             else
