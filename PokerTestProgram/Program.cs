@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection.Metadata.Ecma335;
+using System.Runtime.Serialization;
 
 namespace PokerTestProgram
 {
@@ -34,8 +36,7 @@ namespace PokerTestProgram
             
             Console.WriteLine("\nRiver bet:");
             dealer.TakeBets();
-            var winners = dealer.FindWinners();    // TODO: Assign chips to winners
-            
+            var winners = dealer.FindWinners();    // TODO: Assign chips to winners         
         }
     }
 
@@ -53,6 +54,34 @@ namespace PokerTestProgram
         SmallBlind,
         BigBlind,
         NoBlind
+    }
+    
+    public class PlayerIsFoldedException : Exception
+    {
+        //
+        // For guidelines regarding the creation of new exception types, see
+        //    http://msdn.microsoft.com/library/default.asp?url=/library/en-us/cpgenref/html/cpconerrorraisinghandlingguidelines.asp
+        // and
+        //    http://msdn.microsoft.com/library/default.asp?url=/library/en-us/dncscol/html/csharp07192001.asp
+        //
+
+        public PlayerIsFoldedException()
+        {
+        }
+
+        public PlayerIsFoldedException(string message) : base(message)
+        {
+        }
+
+        public PlayerIsFoldedException(string message, Exception inner) : base(message, inner)
+        {
+        }
+
+        protected PlayerIsFoldedException(
+            SerializationInfo info,
+            StreamingContext context) : base(info, context)
+        {
+        }
     }
     
     public class Card
@@ -78,9 +107,43 @@ namespace PokerTestProgram
         public bool IsAllInPot { get; set; } = false;
         public int AllInAmountToMatch { get; set; }
         
-        public void AddToPot(int chipsAmount)
+        public void AddToPot(Player player, int chipsAmount)
         {
-            PotAmount += chipsAmount;
+            AddPlayerToPot(player);
+            
+            PotAmount += chipsAmount;    //TODO: Fix bug where more chips are in chipsAmount than what was betted (fx: Ivey bets 80, but chipsAmount is 100)
+        }
+
+        private void AddPlayerToPot(Player player)
+        {
+            if(IsPlayerAlreadyInPot(player) == false)
+                players.Add(player);
+        }
+
+        public void RemovePlayerFromPot(Player playerToRemove)
+        {
+            for (int i = 0; i < players.Count; i++)
+            {
+                if (players[i].Alias == playerToRemove.Alias)
+                {
+                    players.RemoveAt(i);
+                    
+                    return;
+                }
+            }
+        }
+
+        private bool IsPlayerAlreadyInPot(Player playerToCheck)
+        {
+            foreach (var player in players)
+            {
+                if (player.Alias == playerToCheck.Alias)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 
@@ -118,7 +181,16 @@ namespace PokerTestProgram
             do
             {
                 Console.WriteLine("Player: " + Alias +", place your bet...");
-                parseSucceeded = int.TryParse(Console.ReadLine(), out bet);
+
+                var playerBet = Console.ReadLine();
+
+                if (playerBet != null && playerBet.ToLower().Equals("f"))
+                {
+                    IsFolded = true;
+                    throw new PlayerIsFoldedException();
+                }
+                
+                parseSucceeded = int.TryParse(playerBet, out bet);
             } while (!parseSucceeded);
 
             return bet;
@@ -373,6 +445,9 @@ namespace PokerTestProgram
             
             foreach (var pot in _pokerTable.Pots)
             {
+                if(pot.players.Count == 0) 
+                    break; // Don't find winners in an empty pot
+                
                 var potWinners = FindPotWinners(pot);
 
                 PayPotWinners(potWinners, pot);
@@ -430,11 +505,14 @@ namespace PokerTestProgram
         
         //TODO: Shift player list so the same person doesn't start every round
         
+        //TODO: Add a player to the pot the player is putting chips into
+        
         public void TakeBets(bool isPreFlop = false)
         {
             // Count blinds as chips that are betted in the round
             if (isPreFlop)
             {
+                //TODO: Don't use 0 and 1, but go through players and find the ones who has actually paid the blinds
                 _pokerTable.players[0].BettedThisRound = _pokerTable.SmallBlindAmount;
                 _pokerTable.players[1].BettedThisRound = _pokerTable.BigBlindAmount;
             }
@@ -442,7 +520,8 @@ namespace PokerTestProgram
             // Go through all players and let them bet
             foreach (var pokerPlayer in _pokerTable.players)
             {
-                TakeBetFromPlayer(pokerPlayer, isPreFlop);
+                if (pokerPlayer.IsFolded == false)
+                    TakeBetFromPlayer(pokerPlayer, isPreFlop);
             }
 
             while (IsUnevenBets())
@@ -450,6 +529,10 @@ namespace PokerTestProgram
                 // Go through the players again until everyone has bet the same amount
                 foreach (var pokerPlayer in _pokerTable.players)
                 {
+                    if (pokerPlayer.IsFolded)
+                    {
+                        continue;
+                    }
                     if (pokerPlayer.IsAllIn)
                     {
                         continue;
@@ -476,7 +559,16 @@ namespace PokerTestProgram
             // Request bet as long as the bet is not valid
             do
             {
-                bet = pokerPlayer.PlaceBet();
+                try
+                {
+                    bet = pokerPlayer.PlaceBet();
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Catched: Player: " + pokerPlayer.Alias + " has folded and can not make a bet");
+                    FoldPlayer(pokerPlayer);
+                    return;
+                }
             } while (IsBetAllowed(pokerPlayer, bet) == false);
             
             HandleABet(pokerPlayer, bet, isPreFlop);
@@ -485,9 +577,6 @@ namespace PokerTestProgram
         private void HandleABet(Player player, int bet, bool isPreFlop)
         {
             var isGoingAllIn = IsGoingAllIn(player, bet); // placed before taking the chips from the player, so taking the chips can be done just one place
-            
-            player.ChipsAmount -= bet;
-            player.BettedThisRound += bet;
 
             if (bet > 0)
             {
@@ -508,11 +597,14 @@ namespace PokerTestProgram
             {
                 Console.WriteLine("Player: " + player.Alias + " is checking");
             }
+            
+            player.ChipsAmount -= bet;    //TODO: Check that placing these two lines at the bottom, has fixed bug in handleBetInMultiplePots -> All-in stuff
+            player.BettedThisRound += bet;
         }
 
         private void HandleNormalBet(Player player, int bet)
         {
-            _pokerTable.Pots.Last().AddToPot(bet);  
+            _pokerTable.Pots.Last().AddToPot(player, bet);  
         }
 
         private void HandleAllInBet(Player player, int bet, bool isPreFlop = false)
@@ -525,8 +617,8 @@ namespace PokerTestProgram
             }
             else
             {
-                _pokerTable.Pots.Last().AddToPot(bet);
-                _pokerTable.Pots.Last().AllInAmountToMatch = player.BettedThisRound;
+                _pokerTable.Pots.Last().AddToPot(player, bet);
+                _pokerTable.Pots.Last().AllInAmountToMatch = player.BettedThisRound + bet;
                 _pokerTable.Pots.Last().IsAllInPot = true;
 
 //                if (isPreFlop)
@@ -553,7 +645,7 @@ namespace PokerTestProgram
                 {
                     if (pot.IsAllInPot)
                     {
-                        pot.AddToPot(pot.AllInAmountToMatch);
+                        pot.AddToPot(player, pot.AllInAmountToMatch - player.BettedThisRound);
 
                         betAmountStillLeft -= pot.AllInAmountToMatch;
 
@@ -564,7 +656,7 @@ namespace PokerTestProgram
                     }
                     else
                     {
-                        pot.AddToPot(betAmountStillLeft);
+                        pot.AddToPot(player, betAmountStillLeft);
 
                         betAmountStillLeft = 0;
 
@@ -588,6 +680,39 @@ namespace PokerTestProgram
         private void ResetHighestBetInRound()
         {
             _pokerTable.HighestBetInRound = 0;
+        }
+
+        private void FoldPlayer(Player player)
+        {
+            player.IsFolded = true;
+            
+            foreach (var pot in _pokerTable.Pots)
+            {
+                pot.RemovePlayerFromPot(player);
+            }
+
+            if (IsOnlyOnePlayerLeft())
+            {
+                Console.WriteLine("Only one player left, the round should be over now!"); //TODO: Find out how to end the round, and make the last unfolded player win
+            }
+        }
+
+        private bool IsOnlyOnePlayerLeft()
+        {
+            var unfoldedPlayers = 0;
+            
+            foreach (var player in _pokerTable.players)
+            {
+                if (player.IsFolded == false)
+                {
+                    unfoldedPlayers++;
+                }
+            }
+
+            if (unfoldedPlayers == 1)
+                return true;
+
+            return false;
         }
 
         private bool IsFirstRound()
@@ -647,7 +772,7 @@ namespace PokerTestProgram
             // Go through the players again until everyone has bet the same amount
             foreach (var pokerPlayer in _pokerTable.players)
             {
-                if (highestBetToMatch != pokerPlayer.BettedThisRound && pokerPlayer.IsAllIn == false)
+                if (highestBetToMatch != pokerPlayer.BettedThisRound && pokerPlayer.IsAllIn == false && pokerPlayer.IsFolded == false)
                 {
                     return true;
                 }
