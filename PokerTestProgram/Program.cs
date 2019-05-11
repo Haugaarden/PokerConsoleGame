@@ -19,26 +19,31 @@ namespace PokerTestProgram
             pokerRoom.AddPlayerToRoom(new Player("Phil Laak", 100));
             pokerRoom.AddPlayerToRoom(new Player("Phil Phil", 200));
 
-            dealer.RemoveBankruptPlayers();
-            dealer.DistributeButtons();
-            dealer.TakePaymentFromBlinds();
-            dealer.DealCards();
-            
-            Console.WriteLine("Preflop bet:");
-            dealer.TakeBets(true);
-            dealer.DrawFlopCards();
-            
-            Console.WriteLine("\nFlop bet:");
-            dealer.TakeBets();
-            dealer.DrawTurnCard();
-            
-            Console.WriteLine("\nTurn bet:");
-            dealer.TakeBets();
-            dealer.DrawRiverCard();
-            
-            Console.WriteLine("\nRiver bet:");
-            dealer.TakeBets();
-            var winners = dealer.FindWinners();        
+            while (true)
+            {
+                dealer.RemoveBankruptPlayers();
+                dealer.DistributeButtons();
+                dealer.TakePaymentFromBlinds();
+                dealer.DealCards();
+
+                Console.WriteLine("Preflop bet:");
+                dealer.TakeBets(true);
+                dealer.DrawFlopCards();
+
+                Console.WriteLine("\nFlop bet:");
+                dealer.TakeBets();
+                dealer.DrawTurnCard();
+
+                Console.WriteLine("\nTurn bet:");
+                dealer.TakeBets();
+                dealer.DrawRiverCard();
+
+                Console.WriteLine("\nRiver bet:");
+                dealer.TakeBets();
+                var winners = dealer.FindWinners();
+
+                dealer.NewRound();
+            }
         }
     }
 
@@ -277,11 +282,21 @@ namespace PokerTestProgram
             communityCards.Add(communityCard);
         }
 
-        public void ResetRoom()
+        public void ResetTable()
         {
-            players = new List<Player>();
+            //players = new List<Player>();
             communityCards = new List<Card>();
             Pots = new List<Pot>();
+            HighestBetInRound = 0;
+            UnfoldPlayers();
+        }
+
+        private void UnfoldPlayers()
+        {
+            foreach (var player in players)
+            {
+                player.IsFolded = false;
+            }
         }
         
         public void AddNewPot()
@@ -449,6 +464,8 @@ namespace PokerTestProgram
 
         public void DealCards()
         {
+            _cardDeck.ResetDeck();
+            
             _cardDeck.ShuffleCards(10);
 
             _cardDeck.TakeTopCard(); // Remove the first card
@@ -878,6 +895,11 @@ namespace PokerTestProgram
             }
 
             return false;
+        }
+
+        public void NewRound()
+        {
+            _pokerTable.ResetTable();
         }
     }
 }
