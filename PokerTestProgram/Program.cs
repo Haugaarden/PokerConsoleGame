@@ -14,11 +14,11 @@ namespace PokerTestProgram
             var pokerRoom = new PokerTable();
             var dealer = new Dealer(pokerRoom, deck);
 
-            pokerRoom.AddPlayerToRoom(new Player("Phil Ivey", 100));
+            pokerRoom.AddPlayerToRoom(new Player("Phil Ivey", 200));
             pokerRoom.AddPlayerToRoom(new Player("Phil Hellmuth", 100));
-            pokerRoom.AddPlayerToRoom(new Player("Phil Laak", 100));
+            pokerRoom.AddPlayerToRoom(new Player("Phil Laak", 200));
             
-            dealer.DistributeBlinds();
+            dealer.DistributeButtons();
             dealer.TakePaymentFromBlinds();
             dealer.DealCards();
             
@@ -36,7 +36,7 @@ namespace PokerTestProgram
             
             Console.WriteLine("\nRiver bet:");
             dealer.TakeBets();
-            var winners = dealer.FindWinners();    // TODO: Assign chips to winners         
+            var winners = dealer.FindWinners();        
         }
     }
 
@@ -53,6 +53,7 @@ namespace PokerTestProgram
     {
         SmallBlind,
         BigBlind,
+        Dealer,
         NoBlind
     }
     
@@ -96,8 +97,6 @@ namespace PokerTestProgram
             Value = value;
         }
     }
-    
-    //TODO: Handle folding
 
     public class Pot
     {
@@ -325,9 +324,9 @@ namespace PokerTestProgram
             }
         }
         
-        // TODO: Handle bankrupt players
+        // TODO: Handle bankrupt players, perhaps just fold them?
 
-        public void DistributeBlinds()
+        public void DistributeButtons()
         {
             if (IsFirstRound())
             {
@@ -429,8 +428,6 @@ namespace PokerTestProgram
 
         public List<Player> FindWinners()
         {
-            // TODO: Handle folded players
-            
             // Calculate each player's hand strength
             foreach (var pokerPlayer in _pokerTable.players)
             {
@@ -495,18 +492,14 @@ namespace PokerTestProgram
             _pokerTable.AddCommunityCard(_cardDeck.TakeTopCard());
         }
 
-        //TODO: Make sure that a player can go all in, even when the person before him has betted higher than he has
+        //TODO: Make chips go to the next pot if there's more chips in it than the all-in amount to match
         
-        //TODO: Make sure that the player to the left of the dealer is starting
-        
-        //TODO: Remove a player from all pots when folding
-        
+        //TODO: Perhaps use the correct rules for starting players: https://boardgames.stackexchange.com/questions/1617/texas-holdem-heads-up-blind-structure
+
         //TODO: Make sure a new pot is only created when it should instead of everytime someone is all-in
         
         //TODO: Shift player list so the same person doesn't start every round
-        
-        //TODO: Add a player to the pot the player is putting chips into
-        
+
         public void TakeBets(bool isPreFlop = false)
         {
             // Count blinds as chips that are betted in the round
@@ -600,6 +593,26 @@ namespace PokerTestProgram
             
             player.ChipsAmount -= bet;    //TODO: Check that placing these two lines at the bottom, has fixed bug in handleBetInMultiplePots -> All-in stuff
             player.BettedThisRound += bet;
+
+            MoveChipsToTheCorrectPots();
+        }
+
+        private void MoveChipsToTheCorrectPots()
+        {
+            if (_pokerTable.Pots.Count <= 1) return;
+            
+            for (var i = 0; i < _pokerTable.Pots.Count - 1; i++)
+            {
+                var pot = _pokerTable.Pots[i];
+
+                if (pot.IsAllInPot && (pot.PotAmount != (pot.AllInAmountToMatch * pot.players.Count)))
+                {
+                    var chipsToMove = pot.PotAmount - pot.AllInAmountToMatch * pot.players.Count;
+
+                    pot.PotAmount -= chipsToMove;
+                    _pokerTable.Pots[i + 1].PotAmount += chipsToMove;
+                }
+            }
         }
 
         private void HandleNormalBet(Player player, int bet)
@@ -632,8 +645,6 @@ namespace PokerTestProgram
                 Console.WriteLine("Player: " + player.Alias + " is now ALL-IN!");
             }
         }
-        
-        //TODO: When in a new round, players can go all in with 0 when they are already all-in :(
 
         private void HandleBetInMultiplePots(Player player, int bet, bool isAllIn = false)
         {
@@ -734,6 +745,11 @@ namespace PokerTestProgram
             {
                 Console.WriteLine("Player: " + player.Alias + " you are ALL-IN. You can't bet any chips"); // TODO: This should only happen if the player is ALL-IN. A bankrupt player should never get this far!!
                 return false;
+            }
+
+            if (IsGoingAllIn(player, bet))
+            {
+                return true;
             }
             
             // check that player has enough chips
