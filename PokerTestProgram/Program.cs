@@ -14,11 +14,12 @@ namespace PokerTestProgram
             var pokerRoom = new PokerTable();
             var dealer = new Dealer(pokerRoom, deck);
 
-            pokerRoom.AddPlayerToRoom(new Player("Phil Ivey", 200));
+            pokerRoom.AddPlayerToRoom(new Player("Phil Ivey", 100));
             pokerRoom.AddPlayerToRoom(new Player("Phil Hellmuth", 100));
-            pokerRoom.AddPlayerToRoom(new Player("Phil Laak", 200));
+            pokerRoom.AddPlayerToRoom(new Player("Phil Laak", 100));
             pokerRoom.AddPlayerToRoom(new Player("Phil Phil", 200));
-            
+
+            dealer.RemoveBankruptPlayers();
             dealer.DistributeButtons();
             dealer.TakePaymentFromBlinds();
             dealer.DealCards();
@@ -325,9 +326,21 @@ namespace PokerTestProgram
                 pokerPlayer.BettedThisRound = 0;
             }
         }
-        
-        // TODO: Handle bankrupt players, perhaps just fold them, or remove from players list and add to spectators?
 
+        public void RemoveBankruptPlayers()
+        {
+            for (int i = 0; i < _pokerTable.players.Count; i++)
+            {
+                var player = _pokerTable.players[i];
+                
+                if (player.ChipsAmount == 0)
+                {
+                    _pokerTable.spectators.Add(player);
+                    _pokerTable.players.Remove(player);
+                }
+            }
+        }
+        
         public void DistributeButtons()
         {
             if (IsFirstRound())
@@ -337,7 +350,7 @@ namespace PokerTestProgram
                 
                 if (_pokerTable.players.Count > 2)
                 {
-                    _pokerTable.players.Last().Blind =Blinds.Dealer; // TODO: Find other way to distribute buttons, should work for 
+                    _pokerTable.players.Last().Blind =Blinds.Dealer; // TODO: Find other way to distribute buttons, should work for 2 players AND for more than 2 players
                 }
                 else
                 {
@@ -404,11 +417,27 @@ namespace PokerTestProgram
             {
                 if (pokerPlayer.Blind == Blinds.SmallBlind)
                 {
-                    HandleABet(pokerPlayer, _pokerTable.SmallBlindAmount, true);
+                    // If a player can't play the blind, goes all in
+                    if (pokerPlayer.ChipsAmount < _pokerTable.SmallBlindAmount)
+                    {
+                        HandleABet(pokerPlayer, pokerPlayer.ChipsAmount, true);
+                    }
+                    else
+                    {
+                        HandleABet(pokerPlayer, _pokerTable.SmallBlindAmount, true);   
+                    }
                 }
                 else if (pokerPlayer.Blind == Blinds.BigBlind)
                 {
-                    HandleABet(pokerPlayer, _pokerTable.BigBlindAmount, true);
+                    // If a player can't play the blind, goes all in
+                    if (pokerPlayer.ChipsAmount < _pokerTable.BigBlindAmount)
+                    {
+                        HandleABet(pokerPlayer, pokerPlayer.ChipsAmount, true);
+                    }
+                    else
+                    {
+                        HandleABet(pokerPlayer, _pokerTable.BigBlindAmount, true);   
+                    }
                 }
             }
         }
@@ -515,18 +544,25 @@ namespace PokerTestProgram
 
         //TODO: Perhaps use the correct rules for starting players: https://boardgames.stackexchange.com/questions/1617/texas-holdem-heads-up-blind-structure
 
-        //TODO: Make sure a new pot is only created when it should instead of every time someone is all-in
-        
-        //TODO: Shift player list so the same person doesn't start every round
+        //TODO: Shift player list so the correct person is the first to bet
 
         public void TakeBets(bool isPreFlop = false)
         {
             // Count blinds as chips that are betted in the round
             if (isPreFlop)
             {
-                //TODO: Don't use 0 and 1, but go through players and find the ones who has actually paid the blinds
-                _pokerTable.players[0].BettedThisRound = _pokerTable.SmallBlindAmount;
-                _pokerTable.players[1].BettedThisRound = _pokerTable.BigBlindAmount;
+                foreach (var player in _pokerTable.players)
+                {
+                    if (player.Blind == Blinds.SmallBlind)
+                    {
+                        player.BettedThisRound = _pokerTable.SmallBlindAmount;
+                    }
+
+                    if (player.Blind == Blinds.BigBlind)
+                    {
+                        player.BettedThisRound = _pokerTable.BigBlindAmount;
+                    }
+                }
             }
             
             // Go through all players and let them bet
@@ -653,12 +689,6 @@ namespace PokerTestProgram
                 _pokerTable.Pots.Last().AllInAmountToMatch = player.BettedThisRound + bet;
                 _pokerTable.Pots.Last().IsAllInPot = true;
 
-//                if (isPreFlop)
-//                {
-//                    _pokerTable.Pots.Last().AllInAmountToMatch += _pokerTable.BigBlindAmount; // If someone goes all in in pre flop, the largest blind amount should also be added to the AllInAmount
-//                    // TODO: This only works if a player can't join the round with a chips amount that is smaller than the big blind. Either count players as bankrupt if they can't play the blinds, or change this logic to something better
-//                }
-                
                 _pokerTable.AddNewPot(); // New pot to be used if other players keeps playing
                 
                 Console.WriteLine("Player: " + player.Alias + " is now ALL-IN!");
@@ -762,7 +792,7 @@ namespace PokerTestProgram
         {
             if (IsPlayerBettingWithEmptyHand(player, bet))
             {
-                Console.WriteLine("Player: " + player.Alias + " you are ALL-IN. You can't bet any chips"); // TODO: This should only happen if the player is ALL-IN. A bankrupt player should never get this far!!
+                Console.WriteLine("Player: " + player.Alias + " you are ALL-IN. You can't bet any chips");
                 return false;
             }
 
