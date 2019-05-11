@@ -412,6 +412,11 @@ namespace PokerTestProgram
         {
             _pokerTable.Pots = new List<Pot>();
             _pokerTable.AddNewPot();
+
+            foreach (var player in _pokerTable.players)
+            {
+                _pokerTable.Pots.Last().players.Add(player);
+            }
             
             foreach (var pokerPlayer in _pokerTable.players)
             {
@@ -545,6 +550,8 @@ namespace PokerTestProgram
         //TODO: Perhaps use the correct rules for starting players: https://boardgames.stackexchange.com/questions/1617/texas-holdem-heads-up-blind-structure
 
         //TODO: Shift player list so the correct person is the first to bet
+        
+        //TODO: Handle multiple rounds (correctly reset values)
 
         public void TakeBets(bool isPreFlop = false)
         {
@@ -568,11 +575,16 @@ namespace PokerTestProgram
             // Go through all players and let them bet
             foreach (var pokerPlayer in _pokerTable.players)
             {
+                if (IsOnlyOnePlayerLeft())
+                {
+                    break;
+                }
+                
                 if (pokerPlayer.IsFolded == false)
                     TakeBetFromPlayer(pokerPlayer, isPreFlop);
             }
 
-            while (IsUnevenBets())
+            while (IsUnevenBets() && IsOnlyOnePlayerLeft() == false)
             {   
                 // Go through the players again until everyone has bet the same amount
                 foreach (var pokerPlayer in _pokerTable.players)
