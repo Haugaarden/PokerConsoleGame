@@ -17,6 +17,7 @@ namespace PokerTestProgram
             pokerRoom.AddPlayerToRoom(new Player("Phil Ivey", 200));
             pokerRoom.AddPlayerToRoom(new Player("Phil Hellmuth", 100));
             pokerRoom.AddPlayerToRoom(new Player("Phil Laak", 200));
+            pokerRoom.AddPlayerToRoom(new Player("Phil Phil", 200));
             
             dealer.DistributeButtons();
             dealer.TakePaymentFromBlinds();
@@ -110,7 +111,7 @@ namespace PokerTestProgram
         {
             AddPlayerToPot(player);
             
-            PotAmount += chipsAmount;    //TODO: Fix bug where more chips are in chipsAmount than what was betted (fx: Ivey bets 80, but chipsAmount is 100)
+            PotAmount += chipsAmount;
         }
 
         private void AddPlayerToPot(Player player)
@@ -258,6 +259,7 @@ namespace PokerTestProgram
     public class PokerTable
     {
         public List<Player> players = new List<Player>();
+        public List<Player> spectators = new List<Player>();
         public List<Card> communityCards = new List<Card>();
         public List<Pot> Pots { get; set; }
         public int HighestBetInRound { get; set; }
@@ -324,7 +326,7 @@ namespace PokerTestProgram
             }
         }
         
-        // TODO: Handle bankrupt players, perhaps just fold them?
+        // TODO: Handle bankrupt players, perhaps just fold them, or remove from players list and add to spectators?
 
         public void DistributeButtons()
         {
@@ -332,11 +334,22 @@ namespace PokerTestProgram
             {
                 _pokerTable.players[0].Blind = Blinds.SmallBlind;
                 _pokerTable.players[1].Blind = Blinds.BigBlind;
+                
+                if (_pokerTable.players.Count > 2)
+                {
+                    _pokerTable.players.Last().Blind =Blinds.Dealer; // TODO: Find other way to distribute buttons, should work for 
+                }
+                else
+                {
+                    _pokerTable.players[1].Blind = Blinds.Dealer;
+                }
             }
             else
             {
                 for (int i = 0; i < _pokerTable.players.Count; i++)
                 {
+                    // TODO: Make better circular handling please
+                    // TODO: Check if dealer button is assigned to the right person when only two players are playing
                     if (_pokerTable.players[i].Blind == Blinds.BigBlind)
                     {
                         // Pass on the big blind to the next player
@@ -349,19 +362,33 @@ namespace PokerTestProgram
                             _pokerTable.players.First().Blind = Blinds.BigBlind;
                         }
                         
-                        // Remove the small blind from the previous player
+                        // Remove make the previous small blind player, the dealer
                         if(i - 1 >= 0)
                         {
-                            _pokerTable.players[i - 1].Blind = Blinds.NoBlind;
+                            _pokerTable.players[i - 1].Blind = Blinds.Dealer;
                         }
                         else
                         {
-                            _pokerTable.players.Last().Blind = Blinds.NoBlind;
+                            _pokerTable.players.Last().Blind = Blinds.Dealer;
                         }
                         
                         //Assign small blind to the previous big blind
                         _pokerTable.players[i].Blind = Blinds.SmallBlind;
                         
+                        // Remove dealer button from the player before the small blind
+                        if(i - 2 >= 0)
+                        {
+                            _pokerTable.players[i - 2].Blind = Blinds.NoBlind;
+                        }
+                        else if(i - 2 == -1)
+                        {
+                            _pokerTable.players.Last().Blind = Blinds.NoBlind;
+                        }
+                        else
+                        {
+                            _pokerTable.players[_pokerTable.players.Count - 1].Blind = Blinds.NoBlind;
+                        }
+
                         break;
                     }
                 }
@@ -378,16 +405,10 @@ namespace PokerTestProgram
                 if (pokerPlayer.Blind == Blinds.SmallBlind)
                 {
                     HandleABet(pokerPlayer, _pokerTable.SmallBlindAmount, true);
-                    
-//                    pokerPlayer.ChipsAmount -= _pokerTable.SmallBlindAmount;
-//                    _pokerTable.Pots.Last().AddToPot(_pokerTable.SmallBlindAmount);
                 }
                 else if (pokerPlayer.Blind == Blinds.BigBlind)
                 {
                     HandleABet(pokerPlayer, _pokerTable.BigBlindAmount, true);
-                    
-//                    pokerPlayer.ChipsAmount -= _pokerTable.BigBlindAmount;
-//                    _pokerTable.Pots.Last().AddToPot(_pokerTable.BigBlindAmount);
                 }
             }
         }
@@ -492,11 +513,9 @@ namespace PokerTestProgram
             _pokerTable.AddCommunityCard(_cardDeck.TakeTopCard());
         }
 
-        //TODO: Make chips go to the next pot if there's more chips in it than the all-in amount to match
-        
         //TODO: Perhaps use the correct rules for starting players: https://boardgames.stackexchange.com/questions/1617/texas-holdem-heads-up-blind-structure
 
-        //TODO: Make sure a new pot is only created when it should instead of everytime someone is all-in
+        //TODO: Make sure a new pot is only created when it should instead of every time someone is all-in
         
         //TODO: Shift player list so the same person doesn't start every round
 
@@ -591,7 +610,7 @@ namespace PokerTestProgram
                 Console.WriteLine("Player: " + player.Alias + " is checking");
             }
             
-            player.ChipsAmount -= bet;    //TODO: Check that placing these two lines at the bottom, has fixed bug in handleBetInMultiplePots -> All-in stuff
+            player.ChipsAmount -= bet;
             player.BettedThisRound += bet;
 
             MoveChipsToTheCorrectPots();
@@ -785,6 +804,7 @@ namespace PokerTestProgram
             var playerWithHighestBetThisRound = _pokerTable.players.OrderByDescending(player => player.BettedThisRound).First();
 
             var highestBetToMatch = playerWithHighestBetThisRound.BettedThisRound;
+            
             // Go through the players again until everyone has bet the same amount
             foreach (var pokerPlayer in _pokerTable.players)
             {
