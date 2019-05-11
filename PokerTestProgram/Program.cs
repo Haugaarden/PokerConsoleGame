@@ -21,6 +21,8 @@ namespace PokerTestProgram
 
             while (true)
             {
+                dealer.ShowPlayersChips();
+                
                 dealer.RemoveBankruptPlayers();
                 dealer.DistributeButtons();
                 dealer.TakePaymentFromBlinds();
@@ -288,14 +290,15 @@ namespace PokerTestProgram
             communityCards = new List<Card>();
             Pots = new List<Pot>();
             HighestBetInRound = 0;
-            UnfoldPlayers();
+            UnfoldPlayersAndTakeTheirCards();
         }
 
-        private void UnfoldPlayers()
+        private void UnfoldPlayersAndTakeTheirCards()
         {
             foreach (var player in players)
             {
                 player.IsFolded = false;
+                player.RemoveCardsFromPlayer();
             }
         }
         
@@ -350,6 +353,8 @@ namespace PokerTestProgram
                 
                 if (player.ChipsAmount == 0)
                 {
+                    Console.WriteLine("Player: " + player.Alias + " has gone bankrupt");
+                    
                     _pokerTable.spectators.Add(player);
                     _pokerTable.players.Remove(player);
                 }
@@ -833,12 +838,16 @@ namespace PokerTestProgram
             // check that player has enough chips
             if (player.ChipsAmount < bet)
             {
+                Console.WriteLine("You only have " + player.ChipsAmount + " chips, so you can't make that bet!");
+                
                 return false;
             }
             
             // check that player's bet is >= other player's bets
             if (player.BettedThisRound + bet < _pokerTable.HighestBetInRound)
             {
+                Console.WriteLine("You have to bet atleast " + _pokerTable.HighestBetInRound + " chips, to make a valid bet!");
+                
                 return false;
             }
 
@@ -900,6 +909,18 @@ namespace PokerTestProgram
         public void NewRound()
         {
             _pokerTable.ResetTable();
+        }
+
+        public void ShowPlayersChips()
+        {
+            Console.WriteLine("Players' chips amount:");
+            
+            foreach (var player in _pokerTable.players)
+            {
+                Console.WriteLine(player.Alias + ":\t" + player.ChipsAmount);
+            }
+            
+            Console.WriteLine();
         }
     }
 }
